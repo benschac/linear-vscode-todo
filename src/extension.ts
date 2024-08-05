@@ -7,7 +7,7 @@
  * 3. ✅ User to config select the project to create the task in
  * 4. ✅ Select cycle to create the task in
  * 5. ✅ Select status to set for created tasks
- * 6. Take highlight text and add it to the task description in a code block
+ * 6. ✅ Take highlight text and add it to the task description in a code block
  *    with a deep link back to the code, line number and file name
  */
 import * as vscode from 'vscode'
@@ -17,6 +17,34 @@ import * as fs from 'fs'
 import { LinearClient } from '@linear/sdk'
 
 let linearClient: LinearClient | undefined
+
+class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
+  provideHover(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    token: vscode.CancellationToken
+  ): vscode.ProviderResult<vscode.Hover> {
+    const lineText = document.lineAt(position.line).text
+    const todoMatch = lineText.match(/\/\/\s*TODO:/)
+
+    if (todoMatch) {
+      const todoStart = lineText.indexOf('TODO:')
+      const todoEnd = todoStart + 4 // Length of "TODO"
+      const range = new vscode.Range(
+        position.line,
+        todoStart,
+        position.line,
+        todoEnd
+      )
+
+      if (range.contains(position)) {
+        return new vscode.Hover('Create a Linear task from this TODO', range)
+      }
+    }
+
+    return null
+  }
+}
 
 class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
   provideCodeActions(
@@ -36,7 +64,7 @@ class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
       vscode.CodeActionKind.QuickFix
     )
     createLinearTaskAction.command = {
-      title: 'Create Linear Task from TODO',
+      title: 'Create Linear Task',
       command: 'extension.createLinearTask',
     }
 
@@ -98,6 +126,13 @@ export function activate(context: vscode.ExtensionContext) {
       updateLinearClient()
     }
   })
+
+  const hoverActionProvider = vscode.languages.registerHoverProvider(
+    { scheme: 'file', language: '*' },
+    new LinearTodoCodeHoverProvider()
+  )
+
+  context.subscriptions.push(hoverActionProvider)
 }
 
 async function updateLinearClient() {
@@ -111,12 +146,6 @@ async function updateLinearClient() {
   linearClient = new LinearClient({
     apiKey: vscode.workspace.getConfiguration('linearTodo').get('apiKey'),
   })
-  linearClient.user
-  const teams = await linearClient.teams()
-  const team = teams.nodes[0].id
-  vscode.window.showInformationMessage(
-    `${JSON.stringify({ hello: 'world', team }, null, 2)}`
-  )
 }
 
 async function createLinearTask() {
@@ -134,13 +163,6 @@ async function createLinearTask() {
   }
 
   const lineText = editor.document.lineAt(editor.selection.start.line).text
-  const lineTextEnd = editor.document.lineAt(editor.selection.end.line).text
-  if (lineText !== lineTextEnd) {
-    vscode.window.showInformationMessage(
-      'Selection spans multiple lines. Please select a single line with a TODO comment'
-    )
-    return
-  }
   const todoMatch = lineText.match(/\/\/\s*TODO:\s*(.*)/)
   if (!todoMatch) {
     vscode.window.showInformationMessage('No TODO: comment found on this line')
@@ -149,14 +171,13 @@ async function createLinearTask() {
 
   const todoText = todoMatch[1].trim()
 
-  // Prompt for task title
   const taskTitle = await vscode.window.showInputBox({
     prompt: 'Enter task title',
     value: todoText,
   })
 
   if (!taskTitle) {
-    return // User cancelled
+    return
   }
   const teams = await linearClient.teams()
   const team = teams.nodes[0]
@@ -204,6 +225,7 @@ async function createLinearTask() {
         /\/\/\s*TODO:/,
         `// TODO: ${(await issue.issue)?.identifier}`
       )
+      new vscode.Hover('thing')
       const range = editor.document.lineAt(editor.selection.start.line).range
       await editor.edit((editBuilder) => {
         editBuilder.replace(range, newText)
