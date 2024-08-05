@@ -11,6 +11,9 @@
  *    with a deep link back to the code, line number and file name
  */
 import * as vscode from 'vscode'
+import * as path from 'path'
+import * as fs from 'fs'
+
 import { LinearClient } from '@linear/sdk'
 
 let linearClient: LinearClient | undefined
@@ -158,8 +161,21 @@ async function createLinearTask() {
   const teams = await linearClient.teams()
   const team = teams.nodes[0]
 
+  // Create description deep link back to github link where todo is
+
   try {
-    // Create issue using Linear SDK
+    // Get the file path relative to the workspace root
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(
+      editor.document.uri
+    )
+    const relativeFilePath = workspaceFolder
+      ? vscode.workspace.asRelativePath(editor.document.uri, false)
+      : editor.document.uri.fsPath
+
+    const { selection } = editor
+    const highlightedText = editor.document.getText(selection).trim()
+
+    const { branch, url } = await getRepositoryInfo()
     const issue = await linearClient.createIssue({
       title: taskTitle,
       teamId: team.id,
@@ -167,7 +183,7 @@ async function createLinearTask() {
       projectId: vscode.workspace
         .getConfiguration('linearTodo')
         .get('projectId'),
-      description: `Created from linear vscode TODO {deep link back to github link where todo is}: ${todoText}`,
+      description: `Created from linear vscode TODO: ${todoText}\n\nHighlighted code:\n\`\`\`\n${highlightedText}\n\`\`\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${selection.start.line}`,
     })
 
     if (issue.success) {
@@ -336,3 +352,73 @@ async function configureLinearTaskStatus() {
 }
 
 export function deactivate() {}
+
+async function getRepositoryUrl(): Promise<string | undefined> {
+  const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports
+  if (gitExtension) {
+    const api = gitExtension.getAPI(1)
+    const repositories = api.repositories
+    vscode.window.showInformationMessage(repositories, 'repositories')
+    if (repositories.length > 0) {
+      const remote = await repositories[0].getRemote('origin')
+      if (remote) {
+        let url = remote.fetchUrl || remote.pushUrl
+        if (url) {
+          // Convert SSH URL to HTTPS URL if necessary
+          url = url.replace(/^git@([^:]+):/, 'https://$1/')
+          url = url.replace(/\.git$/, '')
+          return url
+        }
+      }
+    }
+  }
+  return undefined
+}
+interface RepoInfo {
+  url?: string
+  branch?: string
+}
+
+async function getRepositoryInfo(): Promise<RepoInfo> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]
+  if (!workspaceFolder) {
+    return {}
+  }
+
+  const gitDir = path.join(workspaceFolder.uri.fsPath, '.git')
+
+  try {
+    // Check if .git directory exists
+    await fs.promises.access(gitDir)
+
+    // Read config file
+    const configPath = path.join(gitDir, 'config')
+    const config = await fs.promises.readFile(configPath, 'utf8')
+
+    // Extract remote URL
+    const urlMatch = config.match(/\[remote "origin"\][^\[]*url = (.*)$/m)
+    const url = urlMatch?.[1]?.trim()
+
+    // Read HEAD file to get current branch
+    const headPath = path.join(gitDir, 'HEAD')
+    const head = await fs.promises.readFile(headPath, 'utf8')
+    const branchMatch = head.match(/ref: refs\/heads\/(.*)/)
+    const branch = branchMatch?.[1]?.trim()
+
+    return {
+      url: url ? sanitizeGitUrl(url) : undefined,
+      branch,
+    }
+  } catch (error) {
+    console.error('Error reading git info:', error)
+    return {}
+  }
+}
+
+function sanitizeGitUrl(url: string): string {
+  // Convert SSH URL to HTTPS
+  url = url.replace(/^git@([^:]+):/, 'https://$1/')
+  // Remove .git suffix if present
+  url = url.replace(/\.git$/, '')
+  return url
+}

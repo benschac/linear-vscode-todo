@@ -43,6 +43,9 @@
     "@linear/sdk": "^26.0.0",
     "axios": "^1.7.3"
   },
+  "enabledApiProposals": [
+    "telemetry"
+  ],
   "contributes": {
     "commands": [
       {
