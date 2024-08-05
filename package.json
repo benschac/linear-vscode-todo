@@ -11,14 +11,6 @@
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "linear-todo.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
   "scripts": {
     "vscode:prepublish": "yarn run package",
     "compile": "yarn run check-types && yarn run lint && node esbuild.js",
@@ -34,17 +26,83 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.92.0",
     "@types/mocha": "^10.0.7",
     "@types/node": "20.x",
+    "@types/vscode": "^1.92.0",
     "@typescript-eslint/eslint-plugin": "^7.14.1",
     "@typescript-eslint/parser": "^7.11.0",
-    "eslint": "^8.57.0",
-    "esbuild": "^0.21.5",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.4.5",
     "@vscode/test-cli": "^0.0.9",
-    "@vscode/test-electron": "^2.4.0"
+    "@vscode/test-electron": "^2.4.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.5.4"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "dependencies": {
+    "@linear/sdk": "^26.0.0",
+    "axios": "^1.7.3"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.createLinearTask",
+        "title": "Create Linear Task from TODO"
+      },
+      {
+        "command": "extension.configureLinearTeam",
+        "title": "Select Linear Team"
+      },
+      {
+        "command": "extension.configureLinearProject",
+        "title": "Select Linear Project"
+      },
+      {
+        "command": "extension.configureLinearApiKey",
+        "title": "Set Linear API Key"
+      },
+      {
+        "command": "extension.configureLinearCycle",
+        "title": "Select Linear Cycle"
+      },
+      {
+        "command": "extension.configureLinearTaskStatus",
+        "title": "Select Linear Task Status"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorTextFocus && editorHasSelection",
+          "command": "extension.createLinearTask",
+          "group": "navigation"
+        },
+        {
+          "when": "editorTextFocus && editorHasSelection",
+          "command": "extension.configureLinearTeam",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Linear TODO",
+      "properties": {
+        "linearTodo.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API Key for Linear, from https://linear.app/settings/api"
+        },
+        "linearTodo.projectId": {
+          "type": "string",
+          "default": "",
+          "description": "Project ID for Linear Task"
+        },
+        "linearTodo.cycleId": {
+          "type": "string",
+          "default": "",
+          "description": "Project cycle for task"
+        }
+      }
+    }
+  }
 }
