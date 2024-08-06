@@ -19,11 +19,11 @@ import { LinearClient } from '@linear/sdk'
 let linearClient: LinearClient | undefined
 
 class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
-  provideHover(
+  async provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
     token: vscode.CancellationToken
-  ): vscode.ProviderResult<vscode.Hover> {
+  ): Promise<vscode.Hover | undefined> {
     const lineText = document.lineAt(position.line).text
     const todoMatch = lineText.match(/\/\/\s*TODO:/)
 
@@ -36,13 +36,27 @@ class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
         position.line,
         todoEnd
       )
+      if (!range.contains(position)) {
+        return undefined
+      }
 
-      if (range.contains(position)) {
-        return new vscode.Hover('Create a Linear task from this TODO', range)
+      try {
+        const issue = await linearClient?.issue('BEL-80')
+        vscode.window.showInformationMessage(JSON.stringify(issue, null, 2))
+        const markdown = new vscode.MarkdownString()
+        markdown.appendMarkdown(
+          `[${issue?.identifier} ${issue?.title}](${issue?.url}) by ${
+            (await issue?.creator)?.name
+          }`
+        )
+
+        return new vscode.Hover(markdown, range)
+      } catch (e: unknown) {
+        console.error(e)
       }
     }
 
-    return null
+    return undefined
   }
 }
 
@@ -111,6 +125,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(configureCycle)
   context.subscriptions.push(configureTaskStatus)
 
+  const hoverActionProvider = vscode.languages.registerHoverProvider(
+    { scheme: 'file', language: '*' },
+    new LinearTodoCodeHoverProvider()
+  )
+
+  context.subscriptions.push(hoverActionProvider)
+
   // Register the Code Action Provider
   const codeActionProvider = vscode.languages.registerCodeActionsProvider(
     { scheme: 'file', language: '*' },
@@ -126,13 +147,6 @@ export function activate(context: vscode.ExtensionContext) {
       updateLinearClient()
     }
   })
-
-  const hoverActionProvider = vscode.languages.registerHoverProvider(
-    { scheme: 'file', language: '*' },
-    new LinearTodoCodeHoverProvider()
-  )
-
-  context.subscriptions.push(hoverActionProvider)
 }
 
 async function updateLinearClient() {

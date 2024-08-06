@@ -50,7 +50,7 @@
     "commands": [
       {
         "command": "extension.createLinearTask",
-        "title": "Create Linear Task from TODO"
+        "title": "Create Linear Task"
       },
       {
         "command": "extension.configureLinearTeam",
