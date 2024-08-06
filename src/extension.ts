@@ -41,8 +41,12 @@ class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
       }
 
       try {
-        const issue = await linearClient?.issue('BEL-80')
-        vscode.window.showInformationMessage(JSON.stringify(issue, null, 2))
+        const linearTaskRegex = /[A-Z]{3,5}-\d+/
+        const linearTaskMatch = lineText.match(linearTaskRegex)
+        if (!linearTaskMatch) {
+          return undefined
+        }
+        const issue = await linearClient?.issue(linearTaskMatch?.[0])
         const markdown = new vscode.MarkdownString()
         markdown.appendMarkdown(
           `[${issue?.identifier} ${issue?.title}](${issue?.url}) by ${
@@ -340,8 +344,6 @@ async function configureLinearCycle() {
     vscode.window.showInformationMessage('No cycles found in the team')
     return
   }
-
-  vscode.window.showInformationMessage(JSON.stringify(cycleNames, null, 2))
 
   const selectedCycle = await vscode.window.showQuickPick(cycleNames, {
     placeHolder: 'Select the cycle to create tasks in',
