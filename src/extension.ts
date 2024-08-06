@@ -1,7 +1,6 @@
 /**
  * Additional features
  *
- *
  * 1. ✅ User to config their own API key
  * 2. ✅ User to config select the team to create the task in
  * 3. ✅ User to config select the project to create the task in
@@ -13,6 +12,11 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
 import * as fs from 'fs'
+
+interface RepoInfo {
+  url?: string
+  branch?: string
+}
 
 import { LinearClient } from '@linear/sdk'
 
@@ -91,7 +95,6 @@ class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Linear TODO extension is now active')
   updateLinearClient()
 
   let createTask = vscode.commands.registerCommand(
@@ -199,8 +202,6 @@ async function createLinearTask() {
   }
   const teams = await linearClient.teams()
   const team = teams.nodes[0]
-
-  // Create description deep link back to github link where todo is
 
   try {
     // Get the file path relative to the workspace root
@@ -390,32 +391,6 @@ async function configureLinearTaskStatus() {
 }
 
 export function deactivate() {}
-
-async function getRepositoryUrl(): Promise<string | undefined> {
-  const gitExtension = vscode.extensions.getExtension('vscode.git')?.exports
-  if (gitExtension) {
-    const api = gitExtension.getAPI(1)
-    const repositories = api.repositories
-    vscode.window.showInformationMessage(repositories, 'repositories')
-    if (repositories.length > 0) {
-      const remote = await repositories[0].getRemote('origin')
-      if (remote) {
-        let url = remote.fetchUrl || remote.pushUrl
-        if (url) {
-          // Convert SSH URL to HTTPS URL if necessary
-          url = url.replace(/^git@([^:]+):/, 'https://$1/')
-          url = url.replace(/\.git$/, '')
-          return url
-        }
-      }
-    }
-  }
-  return undefined
-}
-interface RepoInfo {
-  url?: string
-  branch?: string
-}
 
 async function getRepositoryInfo(): Promise<RepoInfo> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]
