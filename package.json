@@ -1,6 +1,7 @@
 {
   "name": "linear-todo",
   "displayName": "linear-todo",
+  "publisher": "benschac",
   "description": "create linear tasks from todos",
   "version": "0.0.1",
   "engines": {
@@ -40,12 +41,8 @@
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
   "dependencies": {
-    "@linear/sdk": "^26.0.0",
-    "axios": "^1.7.3"
+    "@linear/sdk": "^26.0.0"
   },
-  "enabledApiProposals": [
-    "telemetry"
-  ],
   "contributes": {
     "commands": [
       {

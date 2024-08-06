@@ -82,7 +82,7 @@ class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
     }
 
     const createLinearTaskAction = new vscode.CodeAction(
-      'Create Linear Task from TODO',
+      'Create Linear Task',
       vscode.CodeActionKind.QuickFix
     )
     createLinearTaskAction.command = {
