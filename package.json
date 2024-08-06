@@ -2,6 +2,10 @@
   "name": "linear-todo",
   "displayName": "linear-todo",
   "publisher": "benschac",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/benschac/linear-vscode-todo"
+  },
   "description": "create linear tasks from todos",
   "version": "0.0.1",
   "engines": {
