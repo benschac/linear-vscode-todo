@@ -155,45 +155,47 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 
-  vscode.workspace.onDidChangeTextDocument(async (event) => {
-    if (!linearClient) {
-      vscode.window.showErrorMessage(
-        'Linear API key is not set. Please set it in the extension settings.'
-      )
-      return;
-    }
-    
-    const autoCreate = vscode.workspace.getConfiguration('linearTodo').get('autoCreate');
-    if (!autoCreate) {
-      return;
-    }
+  function debounce(func: (...args: any[]) => void, timeout = 300) {
+    let timer: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => func(...args), timeout);
+    };
+  }
 
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.uri.toString() !== event.document.uri.toString()) {
-      return;
-    }
-    // TODO: (ENG-51) Test linear issue
-    for (const change of event.contentChanges) {
-      const { range, text } = change;
+  const autoCreateTimeout = vscode.workspace.getConfiguration('linearTodo').get('autoCreateTimeout') as number || 1000;
+
+  vscode.workspace.onDidChangeTextDocument(
+    debounce(async (event) => {
+      if (!linearClient) {
+        return; // Linear client not configured
+      }
   
-      if (text.includes("TODO:")) {
-        const line = range.start.line;
-        const lineText = event.document.lineAt(line).text;
-        const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.*)/);
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.toString() !== event.document.uri.toString()) {
+        return; // No active editor or change not in active document
+      }
   
+      const document = editor.document;
+  
+      // Iterate over changes to detect "TODO:" comments
+      for (const change of event.contentChanges) {
+        const line = change.range.start.line;
+        const lineText = document.lineAt(line).text;
+  
+        // Match the TODO comment and extract the text after "TODO:"
+        const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.+)/);
         if (todoMatch) {
           const todoText = todoMatch[1].trim();
-  
-          // Check if there's already a Linear issue ID in the TODO
-          const issuePrefix = vscode.workspace.getConfiguration("linearTodo").get("issuePrefix");
-          const linearIssueMatch = lineText.match(new RegExp(`\\(${issuePrefix}[A-Z0-9]+\\)`));
+
+          // Check if there's already a Linear issue ID
+          const linearIssueMatch = lineText.match(/\(.*\)/);
           if (linearIssueMatch) {
             return; // Already has an issue ID
           }
-          
-          // Create the Linear issue
-          const taskTitle = todoText || "Untitled";
-          vscode.window.showInformationMessage('Automatically creating Linear issue: ' + taskTitle)
+  
+          // Create the Linear issue after typing is complete
+          const taskTitle = todoText || "Untitled Task";
           const teams = await linearClient.teams();
           const team = teams.nodes[0];
   
@@ -205,23 +207,22 @@ export function activate(context: vscode.ExtensionContext) {
               title: taskTitle,
               teamId: team.id,
               stateId: vscode.workspace.getConfiguration("linearTodo").get("statusId"),
-              ...(vscode.workspace.getConfiguration("linearTodo").get("projectId") ? {
-                projectId: vscode.workspace.getConfiguration("linearTodo").get("projectId")
+              ...(vscode.workspace.getConfiguration('linearTodo').get('projectId') ? {
+                projectId: vscode.workspace.getConfiguration('linearTodo').get('projectId')
               } : {}),
-              description: `\n\`${lineText}\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${line}\n`,
+              description: `Detected TODO:\n\n\`${lineText}\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${line}`,
             });
-            
+  
             if (createdIssue.success) {
               const issue = await createdIssue.issue;
               if (issue) {
-                // Update the TODO comment with the issue identifier
                 const newTodoText = lineText.replace("TODO:", `TODO: (${issue.identifier})`);
                 const edit = new vscode.WorkspaceEdit();
-                const lineRange = editor.document.lineAt(line).range;
-            
-                edit.replace(editor.document.uri, lineRange, newTodoText);
+                const lineRange = document.lineAt(line).range;
+  
+                edit.replace(document.uri, lineRange, newTodoText);
                 await vscode.workspace.applyEdit(edit);
-            
+  
                 vscode.window.showInformationMessage(
                   `Linear task created: ${issue.url}`
                 );
@@ -234,8 +235,8 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
       }
-    }
-  });
+    }, autoCreateTimeout) // Debounce timeout of 500ms
+  );  
   
 }
 
