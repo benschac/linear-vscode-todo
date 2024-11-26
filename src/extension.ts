@@ -154,6 +154,89 @@ export function activate(context: vscode.ExtensionContext) {
       updateLinearClient()
     }
   })
+
+  vscode.workspace.onDidChangeTextDocument(async (event) => {
+    if (!linearClient) {
+      vscode.window.showErrorMessage(
+        'Linear API key is not set. Please set it in the extension settings.'
+      )
+      return;
+    }
+    
+    const autoCreate = vscode.workspace.getConfiguration('linearTodo').get('autoCreate');
+    if (!autoCreate) {
+      return;
+    }
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.toString() !== event.document.uri.toString()) {
+      return;
+    }
+    // TODO: (ENG-51) Test linear issue
+    for (const change of event.contentChanges) {
+      const { range, text } = change;
+  
+      if (text.includes("TODO:")) {
+        const line = range.start.line;
+        const lineText = event.document.lineAt(line).text;
+        const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.*)/);
+  
+        if (todoMatch) {
+          const todoText = todoMatch[1].trim();
+  
+          // Check if there's already a Linear issue ID in the TODO
+          const issuePrefix = vscode.workspace.getConfiguration("linearTodo").get("issuePrefix");
+          const linearIssueMatch = lineText.match(new RegExp(`\\(${issuePrefix}[A-Z0-9]+\\)`));
+          if (linearIssueMatch) {
+            return; // Already has an issue ID
+          }
+          
+          // Create the Linear issue
+          const taskTitle = todoText || "Untitled";
+          vscode.window.showInformationMessage('Automatically creating Linear issue: ' + taskTitle)
+          const teams = await linearClient.teams();
+          const team = teams.nodes[0];
+  
+          try {
+            const { branch, url } = await getRepositoryInfo();
+            const relativeFilePath = vscode.workspace.asRelativePath(editor.document.uri, false);
+  
+            const createdIssue = await linearClient.createIssue({
+              title: taskTitle,
+              teamId: team.id,
+              stateId: vscode.workspace.getConfiguration("linearTodo").get("statusId"),
+              ...(vscode.workspace.getConfiguration("linearTodo").get("projectId") ? {
+                projectId: vscode.workspace.getConfiguration("linearTodo").get("projectId")
+              } : {}),
+              description: `\n\`${lineText}\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${line}\n`,
+            });
+            
+            if (createdIssue.success) {
+              const issue = await createdIssue.issue;
+              if (issue) {
+                // Update the TODO comment with the issue identifier
+                const newTodoText = lineText.replace("TODO:", `TODO: (${issue.identifier})`);
+                const edit = new vscode.WorkspaceEdit();
+                const lineRange = editor.document.lineAt(line).range;
+            
+                edit.replace(editor.document.uri, lineRange, newTodoText);
+                await vscode.workspace.applyEdit(edit);
+            
+                vscode.window.showInformationMessage(
+                  `Linear task created: ${issue.url}`
+                );
+              }
+            }
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Failed to create Linear task: ${(error as Error).message}`
+            );
+          }
+        }
+      }
+    }
+  });
+  
 }
 
 async function updateLinearClient() {
@@ -220,9 +303,9 @@ async function createLinearTask() {
       title: taskTitle,
       teamId: team.id,
       stateId: vscode.workspace.getConfiguration('linearTodo').get('statusId'),
-      projectId: vscode.workspace
-        .getConfiguration('linearTodo')
-        .get('projectId'),
+      ...(vscode.workspace.getConfiguration('linearTodo').get('projectId') ? {
+        projectId: vscode.workspace.getConfiguration('linearTodo').get('projectId')
+      } : {}),
       description: `Created from linear vscode TODO: ${todoText}\n\nHighlighted code:\n\`\`\`\n${highlightedText}\n\`\`\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${selection.start.line}`,
     })
 
