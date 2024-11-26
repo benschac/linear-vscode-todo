@@ -29,7 +29,7 @@ class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
     token: vscode.CancellationToken
   ): Promise<vscode.Hover | undefined> {
     const lineText = document.lineAt(position.line).text
-    const todoMatch = lineText.match(/\/\/\s*TODO:/)
+    const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:/)
 
     if (todoMatch) {
       const todoStart = lineText.indexOf('TODO:')
@@ -77,7 +77,7 @@ class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.ProviderResult<(vscode.Command | vscode.CodeAction)[]> {
     // Check if the selected text contains a TODO: comment
     const lineText = document.lineAt(range.start.line).text
-    if (!/\/\/\s*TODO:/.test(lineText)) {
+    if (!/(?:\/\/|#|\/\*|--|;)\s*TODO:/.test(lineText)) {
       return []
     }
 
@@ -184,7 +184,7 @@ async function createLinearTask() {
   }
 
   const lineText = editor.document.lineAt(editor.selection.start.line).text
-  const todoMatch = lineText.match(/\/\/\s*TODO:\s*(.*)/)
+  const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.*)/)
   if (!todoMatch) {
     vscode.window.showInformationMessage('No TODO: comment found on this line')
     return
