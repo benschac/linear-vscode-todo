@@ -103,7 +103,7 @@
         },
         "linearTodo.autoCreateTimeout": {
           "type": "number",
-          "default": 1000,
+          "default": 2000,
           "description": "Timeout for auto-creating when a todo is detected"
         },
         "linearTodo.issuePrefix": {
