@@ -29,7 +29,7 @@ class LinearTodoCodeHoverProvider implements vscode.HoverProvider {
     token: vscode.CancellationToken
   ): Promise<vscode.Hover | undefined> {
     const lineText = document.lineAt(position.line).text
-    const todoMatch = lineText.match(/\/\/\s*TODO:/)
+    const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:/)
 
     if (todoMatch) {
       const todoStart = lineText.indexOf('TODO:')
@@ -77,7 +77,7 @@ class LinearTodoCodeActionProvider implements vscode.CodeActionProvider {
   ): vscode.ProviderResult<(vscode.Command | vscode.CodeAction)[]> {
     // Check if the selected text contains a TODO: comment
     const lineText = document.lineAt(range.start.line).text
-    if (!/\/\/\s*TODO:/.test(lineText)) {
+    if (!/(?:\/\/|#|\/\*|--|;)\s*TODO:/.test(lineText)) {
       return []
     }
 
@@ -154,6 +154,90 @@ export function activate(context: vscode.ExtensionContext) {
       updateLinearClient()
     }
   })
+
+  function debounce(func: (...args: any[]) => void, timeout = 300) {
+    let timer: NodeJS.Timeout;
+    return (...args: any[]) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => func(...args), timeout);
+    };
+  }
+
+  const autoCreateTimeout = vscode.workspace.getConfiguration('linearTodo').get('autoCreateTimeout') as number || 1000;
+
+  vscode.workspace.onDidChangeTextDocument(
+    debounce(async (event) => {
+      if (!linearClient) {
+        return; // Linear client not configured
+      }
+  
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.toString() !== event.document.uri.toString()) {
+        return; // No active editor or change not in active document
+      }
+  
+      const document = editor.document;
+  
+      // Iterate over changes to detect "TODO:" comments
+      for (const change of event.contentChanges) {
+        const line = change.range.start.line;
+        const lineText = document.lineAt(line).text;
+  
+        // Match the TODO comment and extract the text after "TODO:"
+        const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.+)/);
+        if (todoMatch) {
+          const todoText = todoMatch[1].trim();
+
+          // Check if there's already a Linear issue ID
+          const linearIssueMatch = lineText.match(/\(.*\)/);
+          if (linearIssueMatch) {
+            return; // Already has an issue ID
+          }
+  
+          // Create the Linear issue after typing is complete
+          const taskTitle = todoText || "Untitled Task";
+          const teams = await linearClient.teams();
+          const team = teams.nodes[0];
+  
+          try {
+            const { branch, url } = await getRepositoryInfo();
+            const relativeFilePath = vscode.workspace.asRelativePath(editor.document.uri, false);
+  
+            const createdIssue = await linearClient.createIssue({
+              title: taskTitle,
+              teamId: team.id,
+              stateId: vscode.workspace.getConfiguration("linearTodo").get("statusId"),
+              ...(vscode.workspace.getConfiguration('linearTodo').get('projectId') ? {
+                projectId: vscode.workspace.getConfiguration('linearTodo').get('projectId')
+              } : {}),
+              description: `Detected TODO:\n\n\`${lineText}\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${line}`,
+            });
+  
+            if (createdIssue.success) {
+              const issue = await createdIssue.issue;
+              if (issue) {
+                const newTodoText = lineText.replace("TODO:", `TODO: (${issue.identifier})`);
+                const edit = new vscode.WorkspaceEdit();
+                const lineRange = document.lineAt(line).range;
+  
+                edit.replace(document.uri, lineRange, newTodoText);
+                await vscode.workspace.applyEdit(edit);
+  
+                vscode.window.showInformationMessage(
+                  `Linear task created: ${issue.url}`
+                );
+              }
+            }
+          } catch (error) {
+            vscode.window.showErrorMessage(
+              `Failed to create Linear task: ${(error as Error).message}`
+            );
+          }
+        }
+      }
+    }, autoCreateTimeout) // Debounce timeout of 500ms
+  );  
+  
 }
 
 async function updateLinearClient() {
@@ -184,7 +268,7 @@ async function createLinearTask() {
   }
 
   const lineText = editor.document.lineAt(editor.selection.start.line).text
-  const todoMatch = lineText.match(/\/\/\s*TODO:\s*(.*)/)
+  const todoMatch = lineText.match(/(?:\/\/|#|\/\*|--|;)\s*TODO:\s*(.*)/)
   if (!todoMatch) {
     vscode.window.showInformationMessage('No TODO: comment found on this line')
     return
@@ -220,9 +304,9 @@ async function createLinearTask() {
       title: taskTitle,
       teamId: team.id,
       stateId: vscode.workspace.getConfiguration('linearTodo').get('statusId'),
-      projectId: vscode.workspace
-        .getConfiguration('linearTodo')
-        .get('projectId'),
+      ...(vscode.workspace.getConfiguration('linearTodo').get('projectId') ? {
+        projectId: vscode.workspace.getConfiguration('linearTodo').get('projectId')
+      } : {}),
       description: `Created from linear vscode TODO: ${todoText}\n\nHighlighted code:\n\`\`\`\n${highlightedText}\n\`\`\`\n\nSource: ${url}/blob/${branch}/${relativeFilePath}#L${selection.start.line}`,
     })
 

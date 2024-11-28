@@ -14,7 +14,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": ["*"],
   "main": "./dist/extension.js",
   "scripts": {
     "vscode:prepublish": "yarn run package",
@@ -95,6 +95,21 @@
           "type": "string",
           "default": "",
           "description": "API Key for Linear, from https://linear.app/settings/api"
+        },
+        "linearTodo.autoCreate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically create Linear tasks when a todo is detected"
+        },
+        "linearTodo.autoCreateTimeout": {
+          "type": "number",
+          "default": 2000,
+          "description": "Timeout for auto-creating when a todo is detected"
+        },
+        "linearTodo.issuePrefix": {
+          "type": "string",
+          "default": "ENG-",
+          "description": "Prefix for Linear issues"
         },
         "linearTodo.projectId": {
           "type": "string",
