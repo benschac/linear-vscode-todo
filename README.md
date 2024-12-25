@@ -2,6 +2,10 @@
 
 Create linear tasks from TODO: comments
 
+<!-- [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](buymeacoffee.com/x1Oeu8D) -->
+
+<a href="https://www.buymeacoffee.com/x1Oeu8D"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="20px"></a>
+
 Linear Task from TODO does not have access to any of your organizations data. All Linear API calls are handled via Linear SDK client-side.
 
 ## Features
